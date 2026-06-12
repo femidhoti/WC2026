@@ -155,6 +155,20 @@ textarea.setup-inp{height:170px;resize:vertical;font-family:'Courier New',monosp
 .divider{height:1px;background:var(--border);margin:0 11px;position:relative}
 .divider::after{content:'vs';position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:.58rem;color:var(--muted);background:var(--card);padding:0 4px}
 
+/* ── SCORES ── */
+.scores-group{margin-bottom:20px}
+.scores-group-title{font-size:.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;padding:6px 14px;background:rgba(240,192,64,.07);border-radius:8px;margin-bottom:8px}
+.score-match{display:grid;grid-template-columns:1fr auto auto auto 1fr;align-items:center;gap:8px;padding:10px 14px;background:var(--card2);border-radius:10px;margin-bottom:6px;border:1px solid var(--border)}
+.score-match.locked{opacity:.6}
+.score-match.locked .score-inp{background:rgba(0,0,0,.3);cursor:not-allowed}
+.sm-team{font-size:.85rem;font-weight:600}
+.sm-team.away{text-align:right}
+.score-inp{width:44px;text-align:center;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#fff;font-size:1rem;font-weight:700;padding:4px 0;outline:none}
+.score-inp:focus{border-color:var(--gold)}
+.sm-vs{color:var(--muted);font-size:.75rem;font-weight:600}
+.sm-lock{font-size:.65rem;color:var(--muted);text-align:center;grid-column:1/-1;margin-top:2px}
+.sm-kick{font-size:.65rem;color:var(--muted);grid-column:1/-1;text-align:center}
+
 /* ── LEADERBOARD ── */
 .lb-header{display:grid;grid-template-columns:40px 1fr 160px 80px 80px 90px;gap:0;padding:8px 14px;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
 .lb-row{
@@ -319,6 +333,7 @@ textarea.setup-inp{height:170px;resize:vertical;font-family:'Courier New',monosp
   <div class="tab on"  data-tab="groups"     onclick="showTab('groups')">⚽ Group Stage</div>
   <div class="tab"     data-tab="bracket"    onclick="showTab('bracket')">🏟 Bracket</div>
   <div class="tab"     data-tab="mypicks"    onclick="showTab('mypicks')">📋 My Picks</div>
+  <div class="tab"     data-tab="scores"      onclick="showTab('scores')">🎯 Scores</div>
   <div class="tab"     data-tab="leaderboard" onclick="showTab('leaderboard')">🏆 Leaderboard</div>
 </div>
 
@@ -358,6 +373,12 @@ textarea.setup-inp{height:170px;resize:vertical;font-family:'Courier New',monosp
     </div>
   </div>
   <div class="info">💡 <strong>Locking in picks</strong> makes them visible to everyone on the leaderboard. You can still edit until the tournament starts.</div>
+</div>
+
+<!-- SCORES -->
+<div class="tc" id="tc-scores">
+  <div class="info">Predict the exact score for each match. <strong>3 pts</strong> for correct score, <strong>1 pt</strong> for correct result. Picks lock automatically at kickoff.</div>
+  <div id="scoresContainer"></div>
 </div>
 
 <!-- LEADERBOARD -->
@@ -480,6 +501,94 @@ const EXTRA=[
   {num:103,lbl:'3rd Place Play-off',loser:true},
   {num:104,lbl:'THE FINAL 🏆',isFinal:true},
 ];
+
+// All 72 group stage fixtures with UTC kickoff timestamps
+const FIXTURES=[
+  // Group A
+  {id:'m1',grp:'A',t1:'A0',t2:'A1',ko:new Date('2026-06-11T19:00:00Z').getTime(),lbl:'Group A – Matchday 1'},
+  {id:'m2',grp:'A',t1:'A2',t2:'A3',ko:new Date('2026-06-12T02:00:00Z').getTime(),lbl:'Group A – Matchday 1'},
+  {id:'m3',grp:'A',t1:'A3',t2:'A1',ko:new Date('2026-06-18T16:00:00Z').getTime(),lbl:'Group A – Matchday 2'},
+  {id:'m4',grp:'A',t1:'A0',t2:'A2',ko:new Date('2026-06-19T01:00:00Z').getTime(),lbl:'Group A – Matchday 2'},
+  {id:'m5',grp:'A',t1:'A3',t2:'A0',ko:new Date('2026-06-25T01:00:00Z').getTime(),lbl:'Group A – Matchday 3'},
+  {id:'m6',grp:'A',t1:'A1',t2:'A2',ko:new Date('2026-06-25T01:00:00Z').getTime(),lbl:'Group A – Matchday 3'},
+  // Group B
+  {id:'m7',grp:'B',t1:'B0',t2:'B1',ko:new Date('2026-06-12T19:00:00Z').getTime(),lbl:'Group B – Matchday 1'},
+  {id:'m8',grp:'B',t1:'B2',t2:'B3',ko:new Date('2026-06-13T19:00:00Z').getTime(),lbl:'Group B – Matchday 1'},
+  {id:'m9',grp:'B',t1:'B3',t2:'B1',ko:new Date('2026-06-18T19:00:00Z').getTime(),lbl:'Group B – Matchday 2'},
+  {id:'m10',grp:'B',t1:'B0',t2:'B2',ko:new Date('2026-06-18T22:00:00Z').getTime(),lbl:'Group B – Matchday 2'},
+  {id:'m11',grp:'B',t1:'B3',t2:'B0',ko:new Date('2026-06-24T19:00:00Z').getTime(),lbl:'Group B – Matchday 3'},
+  {id:'m12',grp:'B',t1:'B1',t2:'B2',ko:new Date('2026-06-24T19:00:00Z').getTime(),lbl:'Group B – Matchday 3'},
+  // Group C
+  {id:'m13',grp:'C',t1:'C0',t2:'C2',ko:new Date('2026-06-13T22:00:00Z').getTime(),lbl:'Group C – Matchday 1'},
+  {id:'m14',grp:'C',t1:'C1',t2:'C3',ko:new Date('2026-06-14T01:00:00Z').getTime(),lbl:'Group C – Matchday 1'},
+  {id:'m15',grp:'C',t1:'C3',t2:'C2',ko:new Date('2026-06-19T22:00:00Z').getTime(),lbl:'Group C – Matchday 2'},
+  {id:'m16',grp:'C',t1:'C0',t2:'C1',ko:new Date('2026-06-20T00:30:00Z').getTime(),lbl:'Group C – Matchday 2'},
+  {id:'m17',grp:'C',t1:'C3',t2:'C0',ko:new Date('2026-06-24T22:00:00Z').getTime(),lbl:'Group C – Matchday 3'},
+  {id:'m18',grp:'C',t1:'C2',t2:'C1',ko:new Date('2026-06-24T22:00:00Z').getTime(),lbl:'Group C – Matchday 3'},
+  // Group D
+  {id:'m19',grp:'D',t1:'D0',t2:'D1',ko:new Date('2026-06-13T01:00:00Z').getTime(),lbl:'Group D – Matchday 1'},
+  {id:'m20',grp:'D',t1:'D2',t2:'D3',ko:new Date('2026-06-14T04:00:00Z').getTime(),lbl:'Group D – Matchday 1'},
+  {id:'m21',grp:'D',t1:'D0',t2:'D2',ko:new Date('2026-06-19T19:00:00Z').getTime(),lbl:'Group D – Matchday 2'},
+  {id:'m22',grp:'D',t1:'D3',t2:'D1',ko:new Date('2026-06-20T03:00:00Z').getTime(),lbl:'Group D – Matchday 2'},
+  {id:'m23',grp:'D',t1:'D3',t2:'D0',ko:new Date('2026-06-26T02:00:00Z').getTime(),lbl:'Group D – Matchday 3'},
+  {id:'m24',grp:'D',t1:'D1',t2:'D2',ko:new Date('2026-06-26T02:00:00Z').getTime(),lbl:'Group D – Matchday 3'},
+  // Group E
+  {id:'m25',grp:'E',t1:'E0',t2:'E3',ko:new Date('2026-06-14T17:00:00Z').getTime(),lbl:'Group E – Matchday 1'},
+  {id:'m26',grp:'E',t1:'E1',t2:'E2',ko:new Date('2026-06-14T23:00:00Z').getTime(),lbl:'Group E – Matchday 1'},
+  {id:'m27',grp:'E',t1:'E0',t2:'E1',ko:new Date('2026-06-20T20:00:00Z').getTime(),lbl:'Group E – Matchday 2'},
+  {id:'m28',grp:'E',t1:'E2',t2:'E3',ko:new Date('2026-06-21T03:00:00Z').getTime(),lbl:'Group E – Matchday 2'},
+  {id:'m29',grp:'E',t1:'E2',t2:'E0',ko:new Date('2026-06-25T20:00:00Z').getTime(),lbl:'Group E – Matchday 3'},
+  {id:'m30',grp:'E',t1:'E3',t2:'E1',ko:new Date('2026-06-25T20:00:00Z').getTime(),lbl:'Group E – Matchday 3'},
+  // Group F
+  {id:'m31',grp:'F',t1:'F0',t2:'F1',ko:new Date('2026-06-14T20:00:00Z').getTime(),lbl:'Group F – Matchday 1'},
+  {id:'m32',grp:'F',t1:'F2',t2:'F3',ko:new Date('2026-06-15T02:00:00Z').getTime(),lbl:'Group F – Matchday 1'},
+  {id:'m33',grp:'F',t1:'F0',t2:'F2',ko:new Date('2026-06-20T17:00:00Z').getTime(),lbl:'Group F – Matchday 2'},
+  {id:'m34',grp:'F',t1:'F3',t2:'F1',ko:new Date('2026-06-21T04:00:00Z').getTime(),lbl:'Group F – Matchday 2'},
+  {id:'m35',grp:'F',t1:'F1',t2:'F2',ko:new Date('2026-06-25T23:00:00Z').getTime(),lbl:'Group F – Matchday 3'},
+  {id:'m36',grp:'F',t1:'F3',t2:'F0',ko:new Date('2026-06-25T23:00:00Z').getTime(),lbl:'Group F – Matchday 3'},
+  // Group G
+  {id:'m37',grp:'G',t1:'G0',t2:'G1',ko:new Date('2026-06-15T19:00:00Z').getTime(),lbl:'Group G – Matchday 1'},
+  {id:'m38',grp:'G',t1:'G2',t2:'G3',ko:new Date('2026-06-16T01:00:00Z').getTime(),lbl:'Group G – Matchday 1'},
+  {id:'m39',grp:'G',t1:'G0',t2:'G2',ko:new Date('2026-06-21T19:00:00Z').getTime(),lbl:'Group G – Matchday 2'},
+  {id:'m40',grp:'G',t1:'G3',t2:'G1',ko:new Date('2026-06-22T01:00:00Z').getTime(),lbl:'Group G – Matchday 2'},
+  {id:'m41',grp:'G',t1:'G1',t2:'G2',ko:new Date('2026-06-27T03:00:00Z').getTime(),lbl:'Group G – Matchday 3'},
+  {id:'m42',grp:'G',t1:'G3',t2:'G0',ko:new Date('2026-06-27T03:00:00Z').getTime(),lbl:'Group G – Matchday 3'},
+  // Group H
+  {id:'m43',grp:'H',t1:'H0',t2:'H3',ko:new Date('2026-06-15T16:00:00Z').getTime(),lbl:'Group H – Matchday 1'},
+  {id:'m44',grp:'H',t1:'H1',t2:'H2',ko:new Date('2026-06-15T22:00:00Z').getTime(),lbl:'Group H – Matchday 1'},
+  {id:'m45',grp:'H',t1:'H0',t2:'H1',ko:new Date('2026-06-21T16:00:00Z').getTime(),lbl:'Group H – Matchday 2'},
+  {id:'m46',grp:'H',t1:'H2',t2:'H3',ko:new Date('2026-06-21T22:00:00Z').getTime(),lbl:'Group H – Matchday 2'},
+  {id:'m47',grp:'H',t1:'H3',t2:'H1',ko:new Date('2026-06-27T00:00:00Z').getTime(),lbl:'Group H – Matchday 3'},
+  {id:'m48',grp:'H',t1:'H2',t2:'H0',ko:new Date('2026-06-27T00:00:00Z').getTime(),lbl:'Group H – Matchday 3'},
+  // Group I
+  {id:'m49',grp:'I',t1:'I0',t2:'I1',ko:new Date('2026-06-16T19:00:00Z').getTime(),lbl:'Group I – Matchday 1'},
+  {id:'m50',grp:'I',t1:'I3',t2:'I2',ko:new Date('2026-06-16T22:00:00Z').getTime(),lbl:'Group I – Matchday 1'},
+  {id:'m51',grp:'I',t1:'I0',t2:'I3',ko:new Date('2026-06-22T21:00:00Z').getTime(),lbl:'Group I – Matchday 2'},
+  {id:'m52',grp:'I',t1:'I2',t2:'I1',ko:new Date('2026-06-23T00:00:00Z').getTime(),lbl:'Group I – Matchday 2'},
+  {id:'m53',grp:'I',t1:'I2',t2:'I0',ko:new Date('2026-06-26T19:00:00Z').getTime(),lbl:'Group I – Matchday 3'},
+  {id:'m54',grp:'I',t1:'I1',t2:'I3',ko:new Date('2026-06-26T19:00:00Z').getTime(),lbl:'Group I – Matchday 3'},
+  // Group J
+  {id:'m55',grp:'J',t1:'J0',t2:'J1',ko:new Date('2026-06-17T01:00:00Z').getTime(),lbl:'Group J – Matchday 1'},
+  {id:'m56',grp:'J',t1:'J2',t2:'J3',ko:new Date('2026-06-17T04:00:00Z').getTime(),lbl:'Group J – Matchday 1'},
+  {id:'m57',grp:'J',t1:'J0',t2:'J2',ko:new Date('2026-06-22T17:00:00Z').getTime(),lbl:'Group J – Matchday 2'},
+  {id:'m58',grp:'J',t1:'J3',t2:'J1',ko:new Date('2026-06-23T03:00:00Z').getTime(),lbl:'Group J – Matchday 2'},
+  {id:'m59',grp:'J',t1:'J3',t2:'J0',ko:new Date('2026-06-28T02:00:00Z').getTime(),lbl:'Group J – Matchday 3'},
+  {id:'m60',grp:'J',t1:'J1',t2:'J2',ko:new Date('2026-06-28T02:00:00Z').getTime(),lbl:'Group J – Matchday 3'},
+  // Group K
+  {id:'m61',grp:'K',t1:'K0',t2:'K2',ko:new Date('2026-06-17T17:00:00Z').getTime(),lbl:'Group K – Matchday 1'},
+  {id:'m62',grp:'K',t1:'K3',t2:'K1',ko:new Date('2026-06-18T02:00:00Z').getTime(),lbl:'Group K – Matchday 1'},
+  {id:'m63',grp:'K',t1:'K0',t2:'K3',ko:new Date('2026-06-23T17:00:00Z').getTime(),lbl:'Group K – Matchday 2'},
+  {id:'m64',grp:'K',t1:'K1',t2:'K2',ko:new Date('2026-06-24T02:00:00Z').getTime(),lbl:'Group K – Matchday 2'},
+  {id:'m65',grp:'K',t1:'K1',t2:'K0',ko:new Date('2026-06-27T23:30:00Z').getTime(),lbl:'Group K – Matchday 3'},
+  {id:'m66',grp:'K',t1:'K2',t2:'K3',ko:new Date('2026-06-27T23:30:00Z').getTime(),lbl:'Group K – Matchday 3'},
+  // Group L
+  {id:'m67',grp:'L',t1:'L0',t2:'L1',ko:new Date('2026-06-17T20:00:00Z').getTime(),lbl:'Group L – Matchday 1'},
+  {id:'m68',grp:'L',t1:'L2',t2:'L3',ko:new Date('2026-06-17T23:00:00Z').getTime(),lbl:'Group L – Matchday 1'},
+  {id:'m69',grp:'L',t1:'L0',t2:'L2',ko:new Date('2026-06-23T20:00:00Z').getTime(),lbl:'Group L – Matchday 2'},
+  {id:'m70',grp:'L',t1:'L3',t2:'L1',ko:new Date('2026-06-23T23:00:00Z').getTime(),lbl:'Group L – Matchday 2'},
+  {id:'m71',grp:'L',t1:'L3',t2:'L0',ko:new Date('2026-06-27T21:00:00Z').getTime(),lbl:'Group L – Matchday 3'},
+  {id:'m72',grp:'L',t1:'L1',t2:'L2',ko:new Date('2026-06-27T21:00:00Z').getTime(),lbl:'Group L – Matchday 3'},
+];
 const B3_LABELS=[
   'Slot 1 — vs Winner Grp E','Slot 2 — vs Winner Grp I','Slot 3 — vs Winner Grp A',
   'Slot 4 — vs Winner Grp L','Slot 5 — vs Winner Grp D','Slot 6 — vs Winner Grp G',
@@ -489,7 +598,7 @@ const B3_LABELS=[
 // ══════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════
-let st={g:{},b3:Array(8).fill(null),br:{}};
+let st={g:{},b3:Array(8).fill(null),br:{},scores:{}};
 let fbConfig=null, db=null, userId=null, userName='';
 let allPreds={}, results={};
 let adminUnlocked=false;
@@ -535,7 +644,8 @@ function syncPicks(){
     name:userName||'Anonymous',
     lastUpdated:firebase.database.ServerValue.TIMESTAMP,
     submitted:!!(localStorage.getItem('submitted_'+userId)),
-    picks:{g:st.g,b3:st.b3,br:st.br}
+    picks:{g:st.g,b3:st.b3,br:st.br},
+    scores:st.scores
   });
 }
 
@@ -1051,10 +1161,62 @@ function showNameEdit(){
 
 function resetAll(){
   if(!confirm('Reset ALL picks?'))return;
-  st={g:{},b3:Array(8).fill(null),br:{}};
+  st={g:{},b3:Array(8).fill(null),br:{},scores:{}};
   localStorage.removeItem('wc26picks');
   localStorage.removeItem('submitted_'+userId);
   renderGroups();renderBracket();progress();updateSummary();syncPicks();
+}
+
+// ══════════════════════════════════════════════════════
+//  SCORE PREDICTIONS
+// ══════════════════════════════════════════════════════
+function fmtKickoff(ts){
+  const d=new Date(ts);
+  return d.toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+}
+function isLocked(f){return Date.now()>=f.ko;}
+
+function renderScores(){
+  const cont=document.getElementById('scoresContainer');
+  if(!cont)return;
+  // Group fixtures by group label
+  const groups={};
+  FIXTURES.forEach(f=>{
+    if(!groups[f.grp])groups[f.grp]=[];
+    groups[f.grp].push(f);
+  });
+  cont.innerHTML=Object.entries(groups).map(([grp,fixtures])=>{
+    const rows=fixtures.map(f=>{
+      const locked=isLocked(f);
+      const sc=st.scores[f.id]||{};
+      const h=sc.h!=null?sc.h:'';
+      const a=sc.a!=null?sc.a:'';
+      const lockStr=locked?'🔒 Locked — match has started':'';
+      return `<div class="score-match${locked?' locked':''}" id="sm-${f.id}">
+        <div class="sm-team">${TEAM[f.t1]||f.t1}</div>
+        <input class="score-inp" type="number" min="0" max="99" value="${h}" ${locked?'disabled':''}
+          onchange="setScore('${f.id}','h',this.value)" placeholder="–">
+        <div class="sm-vs">vs</div>
+        <input class="score-inp" type="number" min="0" max="99" value="${a}" ${locked?'disabled':''}
+          onchange="setScore('${f.id}','a',this.value)" placeholder="–">
+        <div class="sm-team away">${TEAM[f.t2]||f.t2}</div>
+        <div class="sm-kick">${fmtKickoff(f.ko)}${lockStr?'  '+lockStr:''}</div>
+      </div>`;
+    }).join('');
+    return `<div class="scores-group">
+      <div class="scores-group-title">Group ${grp}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function setScore(fid,side,val){
+  const num=parseInt(val,10);
+  if(!st.scores[fid])st.scores[fid]={};
+  if(isNaN(num)||num<0){delete st.scores[fid][side];}
+  else{st.scores[fid][side]=num;}
+  save();
+  if(db&&userId)db.ref('predictions/'+userId+'/scores').set(st.scores);
 }
 
 function showTab(tab){
@@ -1062,6 +1224,7 @@ function showTab(tab){
   document.querySelectorAll('.tc').forEach(c=>c.classList.toggle('on',c.id==='tc-'+tab));
   if(tab==='bracket')renderBracket();
   if(tab==='mypicks')updateSummary();
+  if(tab==='scores')renderScores();
   if(tab==='leaderboard'){renderLeaderboard();setLbJoinUrl();}
 }
 
@@ -1074,7 +1237,7 @@ function save(){
 function load(){
   try{
     const r=localStorage.getItem('wc26picks');
-    if(r){const p=JSON.parse(r);if(p.g)st.g=p.g;if(Array.isArray(p.b3)&&p.b3.length===8)st.b3=p.b3;if(p.br)st.br=p.br;}
+    if(r){const p=JSON.parse(r);if(p.g)st.g=p.g;if(Array.isArray(p.b3)&&p.b3.length===8)st.b3=p.b3;if(p.br)st.br=p.br;if(p.scores)st.scores=p.scores;}
   }catch(e){}
 }
 
