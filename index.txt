@@ -1,0 +1,4 @@
+🏆 World Cup 2026 Family Predictor
+Compete with your family to predict the World Cup. Everyone makes their picks, a live leaderboard tracks scores as the tournament progresses.
+💡 No hosting needed. Each person opens this file locally. A short join code connects everyone to the same shared leaderboard.
+Set up a new family game → Join with a code (family already set up)
