@@ -551,8 +551,13 @@ function applyConfig(){
     let cleaned=raw
       .replace(/^const\s+\w+\s*=\s*/,'')  // remove "const x = "
       .replace(/;?\s*$/,'')               // remove trailing ;
-      .replace(/(\w+):/g,'"$1":')         // quote keys
       .replace(/'/g,'"');                 // single -> double quotes
+    // Quote unquoted keys — only match word chars followed by : that are NOT inside a string value
+    // Strategy: split on string literals, quote keys only in non-string segments
+    cleaned = cleaned.replace(/("(?:[^"\\]|\\.)*")|(\b(\w+)\s*:)/g, (match, str, keyColon, key) => {
+      if(str) return str; // inside a string — leave alone
+      return '"'+key+'":';
+    });
     const cfg=JSON.parse(cleaned);
     if(!cfg.databaseURL) throw new Error('Missing databaseURL — make sure you enabled Realtime Database and included its URL');
     if(!cfg.apiKey) throw new Error('Missing apiKey');
@@ -610,17 +615,23 @@ function buildJoinCode(){
   if(!fbConfig)return'';
   return 'WC26:'+btoa(JSON.stringify(fbConfig));
 }
-function setLbJoinUrl(){
+function buildJoinUrl(){
   const code=buildJoinCode();
+  if(!code)return'';
+  const base=location.href.split('#')[0];
+  return base+'#'+code;
+}
+function setLbJoinUrl(){
+  const url=buildJoinUrl();
   const el=document.getElementById('lbJoinUrl');
-  if(el)el.textContent=code||'(not configured — complete setup first)';
+  if(el)el.textContent=url||'(not configured — complete setup first)';
   const el2=document.getElementById('joinUrl');
-  if(el2)el2.textContent=code||'';
+  if(el2)el2.textContent=url||'';
 }
 function copyJoinLink(){
-  const code=buildJoinCode();
-  if(!code){alert('No Firebase config found. Complete setup first.');return;}
-  navigator.clipboard.writeText(code).then(()=>alert('Join code copied! Paste it in your family group chat 🎉'))
+  const url=buildJoinUrl();
+  if(!url){alert('No Firebase config found. Complete setup first.');return;}
+  navigator.clipboard.writeText(url).then(()=>alert('Join link copied! Send this URL to your family — they just click it to join 🎉'))
     .catch(()=>{
       const ta=document.createElement('textarea');
       ta.value=code;document.body.appendChild(ta);ta.select();
@@ -1003,6 +1014,31 @@ function load(){
 // ══════════════════════════════════════════════════════
 function initApp(){
   load();
+
+  // Auto-join if URL hash contains a join code
+  const hash=location.hash.slice(1);
+  if(hash.startsWith('WC26:')){
+    try{
+      const cfg=JSON.parse(atob(hash.slice(5)));
+      if(cfg.databaseURL&&cfg.apiKey){
+        fbConfig=cfg;
+        localStorage.setItem('fbConfig',JSON.stringify(cfg));
+        // Clear hash so the URL is clean
+        history.replaceState(null,'',location.pathname+location.search);
+        const savedName=localStorage.getItem('userName');
+        if(savedName){
+          userName=savedName;
+          initFirebase(cfg);
+          hideOverlay();
+        } else {
+          initFirebase(cfg);
+          showStep('sName');
+        }
+        return;
+      }
+    }catch(e){}
+  }
+
   const savedCfg=localStorage.getItem('fbConfig');
   const savedName=localStorage.getItem('userName');
 
