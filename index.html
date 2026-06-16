@@ -894,7 +894,7 @@ function renderLeaderboard(){
   if(!rows)return;
 
   const entries=Object.entries(allPreds).map(([uid,data])=>{
-    const score=calcScore(data.picks||{});
+    const score=calcScore({...(data.picks||{}), scores:data.scores||{}});
     return {uid,name:data.name||'Unknown',champ:data.picks?.br?.[104]||null,score,submitted:data.submitted||false};
   });
   entries.sort((a,b)=>b.score-a.score||(b.submitted?1:0)-(a.submitted?1:0));
