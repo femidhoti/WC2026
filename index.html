@@ -981,17 +981,18 @@ function viewPicks(uid, name){
 
 // ══════════════════════════════════════════════════════
 //  AUTO-RESULTS ENGINE (live scores → Firebase)
-//  Pulls real WC2026 results from the open-data feed, derives
-//  scorelines, group 1st/2nd and knockout winners, and writes
-//  them to the shared `results` node. The Organiser admin panel
-//  still works as a manual override/fallback.
+//  Pulls real WC2026 results from TheSportsDB live-score feed,
+//  derives scorelines, group 1st/2nd and knockout winners, and
+//  writes them to the shared `results` node. The Organiser admin
+//  panel still works as a manual override/fallback.
 // ══════════════════════════════════════════════════════
-const RESULTS_FEED='https://cdn.jsdelivr.net/gh/openfootball/worldcup.json@master/2026/worldcup.json';
+const SPORTSDB_KEY='3'; // free TheSportsDB test key — replace with your own free key if it gets rate-limited
+const RESULTS_FEED='https://www.thesportsdb.com/api/v1/json/'+SPORTSDB_KEY+'/eventsseason.php?id=4429&s=2026';
 
 // Map every real country name (incl. common variants) to the app's team id.
 const TEAM_ALIASES={
   A0:['Mexico'], A1:['South Africa'], A2:['South Korea','Korea Republic','Korea'], A3:['Czechia','Czech Republic'],
-  B0:['Canada'], B1:['Bosnia and Herzegovina','Bosnia & Herzegovina','Bosnia & Herz.','Bosnia Herzegovina'], B2:['Qatar'], B3:['Switzerland'],
+  B0:['Canada'], B1:['Bosnia and Herzegovina','Bosnia & Herzegovina','Bosnia-Herzegovina','Bosnia & Herz.'], B2:['Qatar'], B3:['Switzerland'],
   C0:['Brazil'], C1:['Haiti'], C2:['Morocco'], C3:['Scotland'],
   D0:['USA','United States','United States of America'], D1:['Paraguay'], D2:['Australia'], D3:['Türkiye','Turkiye','Turkey'],
   E0:['Germany'], E1:['Ivory Coast',"Côte d'Ivoire","Cote d'Ivoire"], E2:['Ecuador'], E3:['Curaçao','Curacao'],
@@ -1003,13 +1004,41 @@ const TEAM_ALIASES={
   K0:['Portugal'], K1:['Colombia'], K2:['Congo DR','DR Congo','Democratic Republic of the Congo'], K3:['Uzbekistan'],
   L0:['England'], L1:['Croatia'], L2:['Ghana'], L3:['Panama']
 };
-function normNm(s){return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();}
+function normNm(s){return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
 const NAME2ID={};
 Object.entries(TEAM_ALIASES).forEach(([id,names])=>names.forEach(n=>{NAME2ID[normNm(n)]=id;}));
 function name2id(n){return NAME2ID[normNm(n)]||null;}
 
 const FIX_BY_ID={}; FIXTURES.forEach(f=>FIX_BY_ID[f.id]=f);
 const FIX_BY_PAIR={}; FIXTURES.forEach(f=>{FIX_BY_PAIR[[f.t1,f.t2].sort().join('|')]=f.id;});
+
+// Official knockout kickoff times (UTC) → maps feed knockout games to match numbers 73–104.
+const KO_KICKOFF={
+  73:'2026-06-28T19:00Z',74:'2026-06-29T20:30Z',75:'2026-06-30T01:00Z',76:'2026-06-29T17:00Z',
+  77:'2026-06-30T21:00Z',78:'2026-06-30T17:00Z',79:'2026-07-01T01:00Z',80:'2026-07-01T16:00Z',
+  81:'2026-07-02T00:00Z',82:'2026-07-01T20:00Z',83:'2026-07-02T23:00Z',84:'2026-07-02T19:00Z',
+  85:'2026-07-03T03:00Z',86:'2026-07-03T22:00Z',87:'2026-07-04T01:30Z',88:'2026-07-03T18:00Z',
+  89:'2026-07-04T21:00Z',90:'2026-07-04T17:00Z',91:'2026-07-05T20:00Z',92:'2026-07-06T00:00Z',
+  93:'2026-07-06T19:00Z',94:'2026-07-07T00:00Z',95:'2026-07-07T16:00Z',96:'2026-07-07T20:00Z',
+  97:'2026-07-09T20:00Z',98:'2026-07-10T19:00Z',99:'2026-07-11T21:00Z',100:'2026-07-12T01:00Z',
+  101:'2026-07-14T19:00Z',102:'2026-07-15T19:00Z',103:'2026-07-18T21:00Z',104:'2026-07-19T19:00Z'
+};
+function koNumFor(ts){
+  if(!ts)return null;
+  const t=Date.parse((''+ts).trim().replace(' ','T').replace(/Z?$/,'Z'));
+  if(isNaN(t))return null;
+  let best=null,bd=Infinity;
+  for(const num in KO_KICKOFF){const d=Math.abs(Date.parse(KO_KICKOFF[num])-t); if(d<bd){bd=d;best=+num;}}
+  return bd<=5*3600*1000?best:null; // within 5h of the scheduled kickoff
+}
+
+// Score a match only once it's actually finished (we grade full-time results, not live partials).
+const NOT_FINAL=new Set(['ns','not started','1h','2h','ht','live','postp','postponed','tbd','','sched','scheduled']);
+function isFinished(ev){
+  const s=(ev.strStatus||'').trim().toLowerCase();
+  if(NOT_FINAL.has(s))return false;
+  return ev.intHomeScore!=null&&ev.intHomeScore!==''&&ev.intAwayScore!=null&&ev.intAwayScore!=='';
+}
 
 let lastPushSig='';
 function pushResults(sc,g,br){
@@ -1025,34 +1054,28 @@ function pushResults(sc,g,br){
   db.ref('results').update(updates).catch(e=>console.warn('results push failed',e));
 }
 
-function processFeed(matches){
+function processEvents(events){
   const sc={}, br={}, groupMatches={};
-  matches.forEach(m=>{
-    const s=m.score;
-    if(m.group){ // ── group-stage match ──
-      const grp=(m.group||'').replace(/group/i,'').trim();
-      const id1=name2id(m.team1), id2=name2id(m.team2);
-      if(!id1||!id2||!s||!Array.isArray(s.ft)||s.ft.length!==2)return;
-      const key=[id1,id2].sort().join('|'), fid=FIX_BY_PAIR[key];
-      if(fid){
+  events.forEach(ev=>{
+    if(!isFinished(ev))return;
+    const hid=name2id(ev.strHomeTeam), aid=name2id(ev.strAwayTeam);
+    const hs=+ev.intHomeScore, as=+ev.intAwayScore;
+    if(isNaN(hs)||isNaN(as))return;
+    if(hid&&aid){
+      const fid=FIX_BY_PAIR[[hid,aid].sort().join('|')];
+      if(fid){ // ── group-stage match ──
         const f=FIX_BY_ID[fid];
-        sc[fid]= id1===f.t1 ? {h:+s.ft[0],a:+s.ft[1]} : {h:+s.ft[1],a:+s.ft[0]};
+        sc[fid]= hid===f.t1 ? {h:hs,a:as} : {h:as,a:hs};
+        (groupMatches[f.grp]=groupMatches[f.grp]||[]).push({a:hid,b:aid,ga:hs,gb:as});
+        return;
       }
-      (groupMatches[grp]=groupMatches[grp]||[]).push({a:id1,b:id2,ga:+s.ft[0],gb:+s.ft[1]});
-      return;
     }
-    // ── knockout match ──
-    let num=null; const round=(m.round||'').trim();
-    if(typeof m.num==='number'&&m.num>=73&&m.num<=102) num=m.num;
-    else if(/third/i.test(round)) num=103;
-    else if(/^final$/i.test(round)) num=104;
-    if(num==null||!s)return;
-    const base=s.et||s.ft; if(!Array.isArray(base)||base.length!==2)return;
-    const id1=name2id(m.team1), id2=name2id(m.team2); if(!id1||!id2)return;
-    let win=null;
-    if(base[0]>base[1])win=id1; else if(base[1]>base[0])win=id2;
-    else if(Array.isArray(s.p)) win = s.p[0]>s.p[1]?id1:(s.p[1]>s.p[0]?id2:null);
-    if(win) br[num]=win;
+    // ── knockout match → map to match number by kickoff time ──
+    const num=koNumFor(ev.strTimestamp||ev.dateEvent);
+    if(num&&hid&&aid){
+      const win = hs>as?hid : (as>hs?aid : null); // draws (penalty shootouts) left for the Organiser to set
+      if(win) br[num]=win;
+    }
   });
   // group standings — only finalise 1st/2nd once all 6 matches are played
   const g={};
@@ -1082,7 +1105,7 @@ async function autoFetchResults(){
     const res=await fetch(RESULTS_FEED,{cache:'no-store'});
     if(!res.ok)return;
     const data=await res.json();
-    processFeed(data.matches||[]);
+    processEvents(data.events||[]);
   }catch(e){console.warn('Auto-results fetch failed:',e);}
 }
 
