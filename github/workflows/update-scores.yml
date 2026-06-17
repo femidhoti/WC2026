@@ -1,0 +1,15 @@
+name: Update WC2026 scores
+on:
+  schedule:
+    - cron: '0 * * * *'      # every hour, on the hour (UTC)
+  workflow_dispatch:          # lets you run it manually from the Actions tab
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Fetch results and update Firebase
+        run: node scripts/update-scores.mjs
