@@ -12,4 +12,6 @@ jobs:
         with:
           node-version: '20'
       - name: Fetch results and update Firebase
+        env:
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
         run: node scripts/update-scores.mjs
