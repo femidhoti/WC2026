@@ -632,7 +632,7 @@ function initFirebase(cfg){
     localStorage.setItem('userId',userId);
     // Listeners
     db.ref('predictions').on('value',snap=>{allPreds=snap.val()||{}; renderLeaderboard();});
-    db.ref('results').on('value',snap=>{results=snap.val()||{}; renderLeaderboard();});
+    db.ref('results').on('value',snap=>{results=snap.val()||{}; renderLeaderboard(); if(document.getElementById('tc-scores')?.classList.contains('on'))renderScores();});
     document.getElementById('fbDot').classList.remove('off');
     // Auto-pull live results now, then refresh every 30 min while the page is open
     autoFetchResults();
@@ -1195,6 +1195,24 @@ function renderAdminRounds(){
     }
     sec.appendChild(grid);cont.appendChild(sec);
   });
+  // Group-stage actual scorelines — manual entry / override (fills gaps when the feed lags)
+  const scSec=document.createElement('div');
+  scSec.innerHTML=`<div class="rd-title" style="margin-top:16px">Group Stage Scorelines (3pts exact · 1pt result)</div>
+    <p style="font-size:.78rem;color:var(--silver);margin:4px 0 8px">Type a match's final score and click Save Results. Leave blank to let the auto-feed fill it.</p>`;
+  const scGrid=document.createElement('div');scGrid.className='result-grid';
+  FIXTURES.forEach(f=>{
+    const cur=results.sc?.[f.id]||{};
+    const h=cur.h!=null?cur.h:''; const a=cur.a!=null?cur.a:'';
+    const div=document.createElement('div');div.className='result-match';
+    div.innerHTML=`<label>${f.grp}: ${TEAM[f.t1]} v ${TEAM[f.t2]}</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+        <input class="setup-inp" type="number" min="0" max="99" style="width:58px;margin:0" value="${h}" data-sc="${f.id}" data-side="h" placeholder="–">
+        <span style="color:var(--silver);font-weight:700">–</span>
+        <input class="setup-inp" type="number" min="0" max="99" style="width:58px;margin:0" value="${a}" data-sc="${f.id}" data-side="a" placeholder="–">
+      </div>`;
+    scGrid.appendChild(div);
+  });
+  scSec.appendChild(scGrid);cont.appendChild(scSec);
 }
 
 function getTeamsFromResults(m){
@@ -1220,7 +1238,15 @@ function saveResults(){
     if(!newG[g])newG[g]={};
     if(sel.value) newG[g][rank]=sel.value;
   });
-  db.ref('results').set({br:newBr,g:newG}).then(()=>alert('Results saved! Scores updated for everyone ✅'));
+  // Preserve auto-fetched scorelines, then layer in any manually entered ones
+  const newSc=Object.assign({},results.sc||{});
+  const scIn={};
+  document.querySelectorAll('#adminRounds input[data-sc]').forEach(inp=>{
+    const fid=inp.dataset.sc, side=inp.dataset.side, v=inp.value.trim();
+    scIn[fid]=scIn[fid]||{}; if(v!=='') scIn[fid][side]=parseInt(v,10);
+  });
+  Object.entries(scIn).forEach(([fid,o])=>{ if(o.h!=null&&!isNaN(o.h)&&o.a!=null&&!isNaN(o.a)) newSc[fid]={h:o.h,a:o.a}; });
+  db.ref('results').set({br:newBr,g:newG,sc:newSc}).then(()=>alert('Results saved! Scores updated for everyone ✅'));
 }
 
 // ══════════════════════════════════════════════════════
@@ -1334,6 +1360,19 @@ function renderScores(){
       const h=sc.h!=null?sc.h:'';
       const a=sc.a!=null?sc.a:'';
       const lockStr=locked?'🔒 Locked — match has started':'';
+      // Actual result + points you earned on this match (once it's been played)
+      const r=results.sc?.[f.id];
+      let actual='';
+      if(r&&r.h!=null&&r.a!=null){
+        let pts=null;
+        if(sc.h!=null&&sc.a!=null){
+          if(+sc.h===+r.h&&+sc.a===+r.a)pts=3;
+          else if(Math.sign(+sc.h-+sc.a)===Math.sign(+r.h-+r.a))pts=1;
+          else pts=0;
+        }
+        const badge = pts!=null ? ` · <span style="color:${pts?'var(--green)':'var(--muted)'}">+${pts} pt${pts===1?'':'s'}</span>` : '';
+        actual=`<div class="sm-kick" style="color:var(--gold);font-weight:700">✅ Actual: ${r.h}–${r.a}${badge}</div>`;
+      }
       return `<div class="score-match${locked?' locked':''}" id="sm-${f.id}">
         <div class="sm-team">${TEAM[f.t1]||f.t1}</div>
         <input class="score-inp" type="number" min="0" max="99" value="${h}" ${locked?'disabled':''}
@@ -1343,6 +1382,7 @@ function renderScores(){
           onchange="setScore('${f.id}','a',this.value)" placeholder="–">
         <div class="sm-team away">${TEAM[f.t2]||f.t2}</div>
         <div class="sm-kick">${fmtKickoff(f.ko)}${lockStr?'  '+lockStr:''}</div>
+        ${actual}
       </div>`;
     }).join('');
     return `<div class="scores-group">
