@@ -1347,13 +1347,15 @@ function isLocked(f){return Date.now()>=f.ko;}
 function renderScores(){
   const cont=document.getElementById('scoresContainer');
   if(!cont)return;
-  // Group fixtures by group label
-  const groups={};
-  FIXTURES.forEach(f=>{
-    if(!groups[f.grp])groups[f.grp]=[];
-    groups[f.grp].push(f);
+  // Group fixtures by match day (chronological), not by group
+  const groups={}; const order=[];
+  [...FIXTURES].sort((a,b)=>a.ko-b.ko).forEach(f=>{
+    const key=new Date(f.ko).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
+    if(!groups[key]){groups[key]=[];order.push(key);}
+    groups[key].push(f);
   });
-  cont.innerHTML=Object.entries(groups).map(([grp,fixtures])=>{
+  cont.innerHTML=order.map(day=>{
+    const fixtures=groups[day];
     const rows=fixtures.map(f=>{
       const locked=isLocked(f);
       const sc=st.scores[f.id]||{};
@@ -1386,7 +1388,7 @@ function renderScores(){
       </div>`;
     }).join('');
     return `<div class="scores-group">
-      <div class="scores-group-title">Group ${grp}</div>
+      <div class="scores-group-title">${day}</div>
       ${rows}
     </div>`;
   }).join('');
